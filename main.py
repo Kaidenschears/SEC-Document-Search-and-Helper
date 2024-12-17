@@ -19,14 +19,53 @@ llm_analyzer = LLMAnalyzer()
 # Initialize database tables
 db.initialize_tables()
 
+def show_fortune500():
+    st.title("Fortune 500 Companies")
+    
+    # Sample Fortune 500 companies with their CIKs
+    fortune500 = {
+        "Apple Inc.": "0000320193",
+        "Microsoft Corporation": "0000789019",
+        "Amazon.com Inc.": "0001018724",
+        "Alphabet Inc. (Google)": "0001652044",
+        "Meta Platforms Inc.": "0001326801",
+    }
+    
+    st.write("Click on a company to view its analysis:")
+    
+    # Create columns for better layout
+    cols = st.columns(2)
+    for idx, (company, cik) in enumerate(fortune500.items()):
+        col = cols[idx % 2]
+        if col.button(company, key=f"company_{cik}"):
+            st.session_state['selected_cik'] = cik
+            st.session_state['page'] = 'analysis'
+            st.rerun()
+
 def main():
     st.title("Intelligent Stock Advisory System")
     
-    # Sidebar for company selection
-    st.sidebar.title("Company Selection")
-    cik = st.sidebar.text_input("Enter Company CIK:", "0000320193")  # Apple Inc. as default
+    # Initialize session state
+    if 'page' not in st.session_state:
+        st.session_state['page'] = 'home'
+    if 'selected_cik' not in st.session_state:
+        st.session_state['selected_cik'] = None
     
-    if cik:
+    # Sidebar navigation
+    st.sidebar.title("Navigation")
+    if st.sidebar.button("Fortune 500 Companies"):
+        st.session_state['page'] = 'fortune500'
+        st.rerun()
+    
+    # Manual CIK input
+    st.sidebar.title("Company Selection")
+    cik = st.sidebar.text_input("Enter Company CIK:", 
+                               value=st.session_state.get('selected_cik', "0000320193"))
+    
+    # Page routing
+    if st.session_state['page'] == 'fortune500':
+        show_fortune500()
+    elif cik:
         run_analysis(cik)
 
 def run_analysis(cik: str):
