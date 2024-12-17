@@ -22,6 +22,7 @@ class Database:
             conn.close()
 
     def initialize_tables(self):
+        """Initialize database tables"""
         with self.get_connection() as conn:
             with conn.cursor() as cur:
                 # Create companies table
