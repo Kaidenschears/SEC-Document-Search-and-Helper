@@ -24,6 +24,18 @@ class Database:
     def initialize_tables(self):
         with self.get_connection() as conn:
             with conn.cursor() as cur:
+                # Create companies table
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS companies (
+                        cik TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        sic TEXT,
+                        industry TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
                 # Create filings table
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS filings (
@@ -95,6 +107,35 @@ class Database:
                     ORDER BY filing_date DESC 
                     LIMIT %s
                 """, (cik, limit))
+    def upsert_company(self, company: 'Company'):
+        """Insert or update a company in the database"""
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO companies (cik, name, sic, industry, updated_at)
+                    VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (cik) 
+                    DO UPDATE SET 
+                        name = EXCLUDED.name,
+                        sic = EXCLUDED.sic,
+                        industry = EXCLUDED.industry,
+                        updated_at = CURRENT_TIMESTAMP
+                """, (company.cik, company.name, company.sic, company.industry))
+                conn.commit()
+    
+    def get_all_companies(self):
+        """Get all companies from the database"""
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT * FROM companies ORDER BY name")
+                return cur.fetchall()
+    
+    def get_company_by_cik(self, cik: str):
+        """Get a company by CIK"""
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT * FROM companies WHERE cik = %s", (cik,))
+                return cur.fetchone()
                 return cur.fetchall()
 
     def get_financial_metrics(self, cik):

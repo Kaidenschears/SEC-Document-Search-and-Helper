@@ -10,38 +10,66 @@ from financial_analysis import FinancialAnalyzer
 from llm_analyzer import LLMAnalyzer
 from models import Company
 from utils import cache_data, format_currency, format_percentage
+from fortune500_client import Fortune500Client
 
 # Initialize components
 edgar_client = EDGARClient()
 db = Database()
 financial_analyzer = FinancialAnalyzer()
 llm_analyzer = LLMAnalyzer()
+fortune500_client = Fortune500Client()
 
 # Initialize database tables
 db.initialize_tables()
 
+# Function to refresh Fortune 500 data
+def refresh_fortune500_data():
+    companies = fortune500_client.get_fortune500_companies()
+    for company in companies:
+        db.upsert_company(company)
+    return companies
+
 def show_fortune500():
     try:
         st.title("Fortune 500 Companies")
-        st.markdown("### Top Tech Companies")
         
-        # Sample Fortune 500 companies with their CIKs
-        fortune500 = {
-            "Apple Inc.": "0000320193",
-            "Microsoft Corporation": "0000789019",
-            "Amazon.com Inc.": "0001018724",
-            "Alphabet Inc. (Google)": "0001652044",
-            "Meta Platforms Inc.": "0001326801",
-        }
+        # Add refresh button
+        if st.button("🔄 Refresh Data"):
+            with st.spinner("Refreshing Fortune 500 data..."):
+                refresh_fortune500_data()
+                st.success("Data refreshed successfully!")
+        
+        # Get companies from database
+        companies = db.get_all_companies()
+        
+        if not companies:
+            with st.spinner("Loading Fortune 500 data for the first time..."):
+                refresh_fortune500_data()
+                companies = db.get_all_companies()
+        
+        # Group companies by industry
+        df = pd.DataFrame(companies)
+        industries = sorted(df['industry'].unique())
+        
+        # Industry filter
+        selected_industry = st.selectbox(
+            "Filter by Industry",
+            ["All Industries"] + list(industries)
+        )
         
         st.write("Click on a company to view its analysis:")
         
+        # Filter companies by selected industry
+        filtered_companies = companies
+        if selected_industry != "All Industries":
+            filtered_companies = [c for c in companies if c['industry'] == selected_industry]
+        
         # Create columns for better layout
         cols = st.columns(2)
-        for idx, (company, cik) in enumerate(fortune500.items()):
+        for idx, company in enumerate(filtered_companies):
             col = cols[idx % 2]
-            if col.button(company, key=f"company_{cik}", use_container_width=True):
-                st.session_state['selected_cik'] = cik
+            if col.button(company['name'], key=f"company_{company['cik']}", use_container_width=True):
+                st.session_state['selected_cik'] = company['cik']
                 st.session_state['page'] = 'analysis'
                 st.experimental_rerun()
                 
