@@ -2,13 +2,14 @@ import streamlit as st
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import pandas as pd
+import os
 
 from edgar_client import EDGARClient
 from database import Database
 from financial_analysis import FinancialAnalyzer
 from llm_analyzer import LLMAnalyzer
 from models import Company
-from utils import cache_data
+from utils import cache_data, format_currency, format_percentage
 
 # Initialize components
 edgar_client = EDGARClient()
@@ -20,27 +21,33 @@ llm_analyzer = LLMAnalyzer()
 db.initialize_tables()
 
 def show_fortune500():
-    st.title("Fortune 500 Companies")
-    
-    # Sample Fortune 500 companies with their CIKs
-    fortune500 = {
-        "Apple Inc.": "0000320193",
-        "Microsoft Corporation": "0000789019",
-        "Amazon.com Inc.": "0001018724",
-        "Alphabet Inc. (Google)": "0001652044",
-        "Meta Platforms Inc.": "0001326801",
-    }
-    
-    st.write("Click on a company to view its analysis:")
-    
-    # Create columns for better layout
-    cols = st.columns(2)
-    for idx, (company, cik) in enumerate(fortune500.items()):
-        col = cols[idx % 2]
-        if col.button(company, key=f"company_{cik}"):
-            st.session_state['selected_cik'] = cik
-            st.session_state['page'] = 'analysis'
-            st.rerun()
+    try:
+        st.title("Fortune 500 Companies")
+        st.markdown("### Top Tech Companies")
+        
+        # Sample Fortune 500 companies with their CIKs
+        fortune500 = {
+            "Apple Inc.": "0000320193",
+            "Microsoft Corporation": "0000789019",
+            "Amazon.com Inc.": "0001018724",
+            "Alphabet Inc. (Google)": "0001652044",
+            "Meta Platforms Inc.": "0001326801",
+        }
+        
+        st.write("Click on a company to view its analysis:")
+        
+        # Create columns for better layout
+        cols = st.columns(2)
+        for idx, (company, cik) in enumerate(fortune500.items()):
+            col = cols[idx % 2]
+            if col.button(company, key=f"company_{cik}", use_container_width=True):
+                st.session_state['selected_cik'] = cik
+                st.session_state['page'] = 'analysis'
+                st.experimental_rerun()
+                
+    except Exception as e:
+        st.error(f"Error loading Fortune 500 page: {str(e)}")
+        st.session_state['page'] = 'home'
 
 def main():
     st.title("Intelligent Stock Advisory System")
