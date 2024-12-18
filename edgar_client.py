@@ -215,30 +215,64 @@ class EDGARClient:
             print(f"Error parsing Form 4 content: {str(e)}")
             return {"error": f"Failed to parse Form 4 content: {str(e)}"}
 
-    def search_company(self, company_name: str) -> List[Dict]:
-        """Search for companies using local mappings file"""
-        try:
-            mappings_file = "company_mappings.json"
-            search_term = company_name.lower()
-            matches = []
+    _cached_companies = None
+    _last_cache_update = None
 
-            # Check if mappings file exists
+    def _load_company_mappings(self):
+        """Load company mappings with caching"""
+        try:
+            # Check if cache is still valid (5 minutes)
+            now = time.time()
+            if (self._cached_companies is not None and 
+                self._last_cache_update is not None and 
+                now - self._last_cache_update < 300):
+                return self._cached_companies
+
+            mappings_file = "company_mappings.json"
             if not os.path.exists(mappings_file):
                 print("Company mappings file not found. Please run update_company_mappings.py first.")
-                return []
+                return {}
 
-            # Load company mappings
             with open(mappings_file, 'r') as f:
                 data = json.load(f)
-                companies = data.get('companies', {})
+                self._cached_companies = data.get('companies', {})
+                self._last_cache_update = now
+                return self._cached_companies
 
-            # Search through companies
+        except Exception as e:
+            print(f"Error loading company mappings: {str(e)}")
+            return {}
+
+    def search_company(self, company_name: str) -> List[Dict]:
+        """Search for companies using local mappings file with improved performance"""
+        try:
+            if not company_name:
+                return []
+
+            search_term = company_name.lower()
+            companies = self._load_company_mappings()
+            
+            # Quick search for exact matches first
+            exact_matches = []
+            partial_matches = []
+            
             for company_info in companies.values():
-                if (search_term in company_info['name'].lower() or 
-                    search_term in company_info['ticker'].lower()):
-                    matches.append(company_info)
-
-            return matches
+                company_name_lower = company_info['name'].lower()
+                ticker_lower = company_info['ticker'].lower()
+                
+                # Check for exact matches first
+                if search_term == company_name_lower or search_term == ticker_lower:
+                    exact_matches.append(company_info)
+                # Then check for partial matches
+                elif search_term in company_name_lower or search_term in ticker_lower:
+                    partial_matches.append(company_info)
+                
+                # Limit to top 10 matches for better performance
+                if len(exact_matches) + len(partial_matches) >= 10:
+                    break
+            
+            # Return exact matches first, then partial matches
+            return exact_matches + partial_matches
 
         except Exception as e:
             print(f"Error searching for company: {str(e)}")
