@@ -8,7 +8,9 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class CompanyMappingsUpdater:
+
     def __init__(self):
         self.base_url = "https://www.sec.gov/files/company_tickers.json"
         self.headers = {
@@ -47,7 +49,9 @@ class CompanyMappingsUpdater:
             }
             with open(self.mappings_file, 'w') as f:
                 json.dump(data_to_save, f, indent=2)
-            logger.info(f"Saved {len(mappings)} company mappings to {self.mappings_file}")
+            logger.info(
+                f"Saved {len(mappings)} company mappings to {self.mappings_file}"
+            )
         except Exception as e:
             logger.error(f"Error saving mappings: {str(e)}")
             raise
@@ -63,6 +67,7 @@ class CompanyMappingsUpdater:
             logger.error(f"Failed to update mappings: {str(e)}")
             return False
 
+
 def main():
     updater = CompanyMappingsUpdater()
     success = updater.update_mappings()
@@ -70,6 +75,7 @@ def main():
         logger.info("Successfully updated company mappings")
     else:
         logger.error("Failed to update company mappings")
+
 
 if __name__ == "__main__":
     main()
