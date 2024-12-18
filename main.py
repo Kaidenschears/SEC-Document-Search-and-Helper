@@ -131,22 +131,38 @@ def main():
                     if filing['form'] == '4':
                         # Special display for Form 4 (Insider Trading)
                         with st.expander(f"Form 4 - Insider Trading ({filing_date})"):
-                            st.write("**Insider Trading Information**")
-                            st.write(f"Reporting Owner: {filing.get('reporting_owner', 'N/A')}")
-                            shares = filing.get('transaction_shares')
-                            price = filing.get('price_per_share')
-                            if shares and price:
-                                st.write(f"Transaction: {shares:,} shares @ ${price:,.2f} per share")
-                                st.write(f"Total Value: ${shares * price:,.2f}")
+                            col1, col2 = st.columns(2)
                             
-                            if st.button("View Full Document", key=filing['accession_number']):
-                                doc_content = edgar_client.get_filing_document(
-                                    filing['accession_number'],
-                                    cik,
-                                    form_type='4'
-                                )
-                                readable_content = edgar_client.extract_text_content(doc_content)
-                                st.text_area("Document Content", readable_content, height=400)
+                            with col1:
+                                if st.button("View Full Document", key=f"doc_{filing['accession_number']}"):
+                                    doc_content = edgar_client.get_filing_document(
+                                        filing['accession_number'],
+                                        cik,
+                                        form_type='4'
+                                    )
+                                    readable_content = edgar_client.extract_text_content(doc_content)
+                                    st.text_area("Document Content", readable_content, height=400)
+                            
+                            with col2:
+                                if st.button("View Summary", key=f"summary_{filing['accession_number']}"):
+                                    doc_content = edgar_client.get_filing_document(
+                                        filing['accession_number'],
+                                        cik,
+                                        form_type='4'
+                                    )
+                                    summary = edgar_client.parse_form4_content(doc_content)
+                                    
+                                    if "error" in summary:
+                                        st.error(summary["error"])
+                                    else:
+                                        st.write("**Insider Trading Summary**")
+                                        st.write(f"**Insider Name:** {summary['owner_name']}")
+                                        st.write(f"**Position:** {summary['owner_title']}")
+                                        st.write(f"**Transaction:** {summary['transaction_type']}")
+                                        st.write(f"**Shares:** {summary['shares']:,.0f}")
+                                        st.write(f"**Price per Share:** ${summary['price_per_share']:,.2f}")
+                                        total_value = summary['shares'] * summary['price_per_share']
+                                        st.write(f"**Total Value:** ${total_value:,.2f}")
                     else:
                         # Standard display for other forms
                         with st.expander(f"{filing['form']} - {filing_date}"):

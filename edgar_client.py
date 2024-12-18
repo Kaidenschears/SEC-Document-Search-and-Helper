@@ -1,20 +1,18 @@
 import requests
 import time
-from datetime import datetime, timedelta
+from typing import Dict, List
 import trafilatura
-from typing import Dict, List, Optional
+from datetime import datetime, timedelta
 
 class EDGARClient:
     def __init__(self):
         self.base_url = "https://www.sec.gov/Archives/edgar/data"
-        self.submissions_url = "https://data.sec.gov/submissions"
         self.headers = {
-            "User-Agent": "StockAdvisor research@example.com",
-            "Accept-Encoding": "gzip, deflate",
+            'User-Agent': 'Financial Analysis Tool learning@example.com'
         }
         self.last_request_time = 0
         self.rate_limit_delay = 0.1  # 100ms between requests
-
+    
     def _rate_limit(self):
         """Implement rate limiting to comply with SEC EDGAR guidelines"""
         current_time = time.time()
@@ -22,19 +20,20 @@ class EDGARClient:
         if time_since_last_request < self.rate_limit_delay:
             time.sleep(self.rate_limit_delay - time_since_last_request)
         self.last_request_time = time.time()
-
+    
     def get_company_filings(self, cik: str) -> Dict:
-        """Fetch company filings from SEC EDGAR"""
+        """Get company filings data using EDGAR data delivery API"""
         self._rate_limit()
-        padded_cik = cik.zfill(10)
-        url = f"{self.submissions_url}/CIK{padded_cik}.json"
-        print(f"Fetching company filings from: {url}")
-        
         try:
+            padded_cik = cik.zfill(10)
+            url = f"https://data.sec.gov/submissions/CIK{padded_cik}.json"
+            print(f"Fetching company filings from: {url}")
+            
             response = requests.get(url, headers=self.headers)
             response.raise_for_status()
             return response.json()
-        except requests.exceptions.RequestException as e:
+            
+        except Exception as e:
             print(f"Error fetching company filings: {str(e)}")
             raise Exception(f"Failed to fetch filings: {str(e)}")
 
@@ -130,13 +129,50 @@ class EDGARClient:
         except requests.exceptions.RequestException as e:
             print(f"Error fetching document: {str(e)}")
             raise Exception(f"Failed to fetch document: {str(e)}")
-        except Exception as e:
-            print(f"Unexpected error: {str(e)}")
-            raise Exception(f"Failed to process document: {str(e)}")
-
+    
     def extract_text_content(self, html_content: str) -> str:
         """Extract readable text from HTML content using trafilatura"""
-        return trafilatura.extract(html_content)
+        result = trafilatura.extract(html_content)
+        if result is None:
+            return "No readable content found"
+        return result
+
+    def parse_form4_content(self, xml_content: str) -> Dict:
+        """Parse Form 4 XML content to extract key insider trading information"""
+        try:
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(xml_content)
+            
+            # Extract reporting owner information
+            owner_data = root.find(".//reportingOwner")
+            if owner_data is None:
+                return {"error": "No reporting owner found"}
+                
+            owner_name = owner_data.find(".//rptOwnerName")
+            owner_title = owner_data.find(".//officerTitle")
+            
+            # Extract transaction information
+            transaction = root.find(".//nonDerivativeTransaction")
+            if transaction is None:
+                return {"error": "No transaction data found"}
+                
+            shares_elem = transaction.find(".//transactionShares/value")
+            price_elem = transaction.find(".//transactionPricePerShare/value")
+            transaction_code = transaction.find(".//transactionCode")
+            
+            # Get transaction type (P = Purchase, S = Sale)
+            transaction_type = "Purchase" if transaction_code is not None and transaction_code.text == "P" else "Sale"
+            
+            return {
+                "owner_name": owner_name.text if owner_name is not None else "Unknown",
+                "owner_title": owner_title.text if owner_title is not None else "Unknown Position",
+                "transaction_type": transaction_type,
+                "shares": float(shares_elem.text) if shares_elem is not None else 0,
+                "price_per_share": float(price_elem.text) if price_elem is not None else 0
+            }
+        except Exception as e:
+            print(f"Error parsing Form 4 content: {str(e)}")
+            return {"error": f"Failed to parse Form 4 content: {str(e)}"}
 
     def get_recent_filings(self, cik: str, form_types: List[str], days_back: int = 30) -> List[Dict]:
         """Get recent filings for a company filtered by form types"""
@@ -155,11 +191,7 @@ class EDGARClient:
             dates = recent.get('filingDate', [])
             accession_numbers = recent.get('accessionNumber', [])
             primary_docs = recent.get('primaryDocument', [])
-            # Additional data for Form 4
-            reporting_owners = recent.get('reportingOwner', [])
-            transaction_amounts = recent.get('transactionShares', [])
-            transaction_prices = recent.get('transactionPricePerShare', [])
-
+            
             for idx, (form, date, accession, doc) in enumerate(zip(forms, dates, accession_numbers, primary_docs)):
                 if form in form_types:
                     filing_date = datetime.strptime(date, '%Y-%m-%d')
@@ -170,17 +202,6 @@ class EDGARClient:
                             'accession_number': accession,
                             'primary_document': doc
                         }
-                        
-                        # Add insider trading details for Form 4
-                        if form == '4':
-                            try:
-                                filing_data.update({
-                                    'reporting_owner': reporting_owners[idx] if idx < len(reporting_owners) else 'Unknown',
-                                    'transaction_shares': transaction_amounts[idx] if idx < len(transaction_amounts) else None,
-                                    'price_per_share': transaction_prices[idx] if idx < len(transaction_prices) else None
-                                })
-                            except IndexError:
-                                print(f"Warning: Missing insider trading details for filing {accession}")
                         
                         recent_filings.append(filing_data)
                         print(f"Found {form} filing from {date} (Accession: {accession})")
