@@ -37,14 +37,35 @@ class EDGARClient:
     def get_filing_document(self, accession_number: str, cik: str) -> str:
         """Fetch specific filing document content"""
         self._rate_limit()
-        padded_cik = cik.zfill(10)
-        formatted_accession = accession_number.replace("-", "")
-        url = f"https://www.sec.gov/Archives/edgar/data/{padded_cik}/{formatted_accession}/{accession_number}.txt"
-        response = requests.get(url, headers=self.headers)
-        if response.status_code == 200:
-            return response.text
-        else:
-            raise Exception(f"Failed to fetch document: {response.status_code}")
+        try:
+            padded_cik = cik.zfill(10)
+            # Format accession number by removing dashes and adding required parts
+            clean_accession = accession_number.replace("-", "")
+            
+            # Construct proper SEC EDGAR URL
+            url = f"https://www.sec.gov/Archives/edgar/data/{padded_cik}/{clean_accession}/{accession_number}-index.htm"
+            
+            # First get the index page
+            response = requests.get(url, headers=self.headers)
+            
+            if response.status_code == 200:
+                # Find the actual document URL from the index
+                doc_url = f"https://www.sec.gov/Archives/edgar/data/{padded_cik}/{clean_accession}/{clean_accession}.txt"
+                
+                # Get the actual document
+                self._rate_limit()  # Additional rate limit for second request
+                doc_response = requests.get(doc_url, headers=self.headers)
+                
+                if doc_response.status_code == 200:
+                    return doc_response.text
+                else:
+                    raise Exception(f"Failed to fetch document content: {doc_response.status_code}")
+            else:
+                raise Exception(f"Failed to fetch filing index: {response.status_code}")
+                
+        except Exception as e:
+            print(f"Error fetching document for CIK {cik}, accession {accession_number}: {str(e)}")
+            raise Exception(f"Failed to fetch document: {str(e)}")
 
     def extract_text_content(self, html_content: str) -> str:
         """Extract readable text from HTML content using trafilatura"""
