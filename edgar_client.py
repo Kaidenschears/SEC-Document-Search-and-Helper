@@ -15,10 +15,6 @@ class EDGARClient:
         }
         self.last_request_time = 0
         self.rate_limit_delay = 0.1  # 100ms between requests
-        # Initialize company mappings at startup
-        self._cached_companies = None
-        self._last_cache_update = None
-        self._load_company_mappings()  # Preload mappings
     
     def _rate_limit(self):
         """Implement rate limiting to comply with SEC EDGAR guidelines"""
@@ -218,34 +214,6 @@ class EDGARClient:
         except Exception as e:
             print(f"Error parsing Form 4 content: {str(e)}")
             return {"error": f"Failed to parse Form 4 content: {str(e)}"}
-
-    _cached_companies = None
-    _last_cache_update = None
-
-    def _load_company_mappings(self):
-        """Load company mappings with caching"""
-        try:
-            # Check if cache is still valid (5 minutes)
-            now = time.time()
-            if (self._cached_companies is not None and 
-                self._last_cache_update is not None and 
-                now - self._last_cache_update < 300):
-                return self._cached_companies
-
-            mappings_file = "company_mappings.json"
-            if not os.path.exists(mappings_file):
-                print("Company mappings file not found. Please run update_company_mappings.py first.")
-                return {}
-
-            with open(mappings_file, 'r') as f:
-                data = json.load(f)
-                self._cached_companies = data.get('companies', {})
-                self._last_cache_update = now
-                return self._cached_companies
-
-        except Exception as e:
-            print(f"Error loading company mappings: {str(e)}")
-            return {}
 
     def search_company(self, company_name: str) -> List[Dict]:
         """Search for companies by name using SEC API"""
