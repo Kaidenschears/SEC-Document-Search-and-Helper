@@ -142,7 +142,8 @@ def main():
                             if st.button("View Full Document", key=filing['accession_number']):
                                 doc_content = edgar_client.get_filing_document(
                                     filing['accession_number'],
-                                    cik
+                                    cik,
+                                    form_type='4'
                                 )
                                 readable_content = edgar_client.extract_text_content(doc_content)
                                 st.text_area("Document Content", readable_content, height=400)
@@ -152,7 +153,8 @@ def main():
                             if st.button("View Document", key=filing['accession_number']):
                                 doc_content = edgar_client.get_filing_document(
                                     filing['accession_number'],
-                                    cik
+                                    cik,
+                                    form_type=filing['form']
                                 )
                                 readable_content = edgar_client.extract_text_content(doc_content)
                                 st.text_area("Document Content", readable_content, height=400)

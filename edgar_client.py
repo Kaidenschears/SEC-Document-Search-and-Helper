@@ -38,41 +38,54 @@ class EDGARClient:
             print(f"Error fetching company filings: {str(e)}")
             raise Exception(f"Failed to fetch filings: {str(e)}")
 
-    def get_filing_document(self, accession_number: str, cik: str) -> str:
+    def get_filing_document(self, accession_number: str, cik: str, form_type: str = None) -> str:
         """Fetch specific filing document content using EDGAR data delivery API"""
         self._rate_limit()
         try:
             padded_cik = cik.zfill(10)
             clean_accession = accession_number.replace("-", "")
             
-            # First get the filing index to find the main document
-            index_url = f"{self.base_url}/{padded_cik}/{clean_accession}/index.json"
-            print(f"Fetching filing index from: {index_url}")
-            
-            index_response = requests.get(index_url, headers=self.headers)
-            index_response.raise_for_status()
-            
-            # Parse index to find the main document
-            index_data = index_response.json()
-            main_doc = None
-            
-            for file_entry in index_data.get('directory', {}).get('item', []):
-                if file_entry.get('type') == '10-K' or file_entry.get('name', '').endswith('.htm'):
-                    main_doc = file_entry['name']
-                    break
-            
-            if not main_doc:
-                raise Exception("Could not find main document in filing index")
-            
-            # Get the actual document
-            doc_url = f"{self.base_url}/{padded_cik}/{clean_accession}/{main_doc}"
-            print(f"Fetching document from: {doc_url}")
-            
-            self._rate_limit()
-            doc_response = requests.get(doc_url, headers=self.headers)
-            doc_response.raise_for_status()
-            
-            return doc_response.text
+            if form_type == '4':
+                # Form 4 documents can be accessed directly
+                doc_url = f"{self.base_url}/{padded_cik}/{clean_accession}/{accession_number}.xml"
+                print(f"Fetching Form 4 document from: {doc_url}")
+                
+                self._rate_limit()
+                doc_response = requests.get(doc_url, headers=self.headers)
+                doc_response.raise_for_status()
+                
+                return doc_response.text
+            else:
+                # For other forms, get the index first
+                index_url = f"{self.base_url}/{padded_cik}/{clean_accession}/index.json"
+                print(f"Fetching filing index from: {index_url}")
+                
+                index_response = requests.get(index_url, headers=self.headers)
+                index_response.raise_for_status()
+                
+                # Parse index to find the main document
+                index_data = index_response.json()
+                main_doc = None
+                
+                for file_entry in index_data.get('directory', {}).get('item', []):
+                    if (file_entry.get('type') == form_type or 
+                        file_entry.get('name', '').endswith('.htm')):
+                        main_doc = file_entry['name']
+                        break
+                
+                if not main_doc:
+                    # Try the primary document directly
+                    main_doc = f"{clean_accession}.txt"
+                
+                # Get the actual document
+                doc_url = f"{self.base_url}/{padded_cik}/{clean_accession}/{main_doc}"
+                print(f"Fetching document from: {doc_url}")
+                
+                self._rate_limit()
+                doc_response = requests.get(doc_url, headers=self.headers)
+                doc_response.raise_for_status()
+                
+                return doc_response.text
             
         except requests.exceptions.RequestException as e:
             print(f"Error fetching document: {str(e)}")
