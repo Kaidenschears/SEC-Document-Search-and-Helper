@@ -3,6 +3,7 @@ import time
 from typing import Dict, List
 import trafilatura
 from datetime import datetime, timedelta
+import xml.etree.ElementTree as ET
 
 class EDGARClient:
     def __init__(self):
@@ -125,8 +126,8 @@ class EDGARClient:
                 doc_response.raise_for_status()
                 
                 return doc_response.text
-            
-        except requests.exceptions.RequestException as e:
+                
+        except Exception as e:
             print(f"Error fetching document: {str(e)}")
             raise Exception(f"Failed to fetch document: {str(e)}")
     
@@ -140,7 +141,6 @@ class EDGARClient:
     def parse_form4_content(self, xml_content: str) -> Dict:
         """Parse Form 4 XML content to extract key insider trading information"""
         try:
-            import xml.etree.ElementTree as ET
             root = ET.fromstring(xml_content)
             
             # Extract reporting owner information
@@ -212,6 +212,36 @@ class EDGARClient:
         except Exception as e:
             print(f"Error parsing Form 4 content: {str(e)}")
             return {"error": f"Failed to parse Form 4 content: {str(e)}"}
+
+    def search_company(self, company_name: str) -> List[Dict]:
+        """Search for companies by name using SEC API"""
+        self._rate_limit()
+        try:
+            # SEC's company search API
+            url = "https://www.sec.gov/files/company_tickers.json"
+            print(f"Searching for company: {company_name}")
+            
+            response = requests.get(url, headers=self.headers)
+            response.raise_for_status()
+            company_data = response.json()
+            
+            # Search through the companies
+            matches = []
+            search_term = company_name.lower()
+            
+            for _, company in company_data.items():
+                if search_term in company['title'].lower():
+                    matches.append({
+                        'name': company['title'],
+                        'cik': str(company['cik_str']).zfill(10),
+                        'ticker': company['ticker']
+                    })
+            
+            return matches
+            
+        except Exception as e:
+            print(f"Error searching for company: {str(e)}")
+            raise Exception(f"Failed to search for company: {str(e)}")
 
     def get_recent_filings(self, cik: str, form_types: List[str], days_back: int = 30) -> List[Dict]:
         """Get recent filings for a company filtered by form types"""
