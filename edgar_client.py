@@ -46,8 +46,8 @@ class EDGARClient:
             clean_accession = accession_number.replace("-", "")
             
             if form_type == '4':
-                # Form 4 documents can be accessed directly
-                doc_url = f"{self.base_url}/{padded_cik}/{clean_accession}/{accession_number}.xml"
+                # Form 4 documents need special handling
+                doc_url = f"{self.base_url}/{padded_cik}/{clean_accession}/{clean_accession}.txt"
                 print(f"Fetching Form 4 document from: {doc_url}")
                 
                 self._rate_limit()
