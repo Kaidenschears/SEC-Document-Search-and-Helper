@@ -78,30 +78,69 @@ def show_fortune500():
         st.session_state['page'] = 'home'
 
 def main():
-    st.title("Intelligent Stock Advisory System")
+    st.title("SEC Financial Document Search")
     
-    # Initialize session state
-    if 'page' not in st.session_state:
-        st.session_state['page'] = 'home'
-    if 'selected_cik' not in st.session_state:
-        st.session_state['selected_cik'] = None
+    # Company search section
+    st.subheader("Search Company")
+    col1, col2 = st.columns([3, 1])
     
-    # Sidebar navigation
-    st.sidebar.title("Navigation")
-    if st.sidebar.button("Fortune 500 Companies"):
-        st.session_state['page'] = 'fortune500'
-        st.rerun()
+    with col1:
+        company_search = st.text_input(
+            "Enter Company Name or CIK:",
+            help="Enter a company name (e.g., 'Apple Inc.') or CIK number"
+        )
     
-    # Manual CIK input
-    st.sidebar.title("Company Selection")
-    cik = st.sidebar.text_input("Enter Company CIK:", 
-                               value=st.session_state.get('selected_cik', "0000320193"))
+    with col2:
+        form_type = st.selectbox(
+            "Document Type",
+            ["10-K", "10-Q", "8-K", "All"],
+            help="Select the type of financial document"
+        )
     
-    # Page routing
-    if st.session_state['page'] == 'fortune500':
-        show_fortune500()
-    elif cik:
-        run_analysis(cik)
+    if company_search:
+        if company_search.isdigit():
+            # Direct CIK lookup
+            cik = company_search.zfill(10)
+        else:
+            # Use example CIK for now - we'll enhance this later
+            common_companies = {
+                "apple": "0000320193",
+                "microsoft": "0000789019",
+                "amazon": "0001018724",
+                "google": "0001652044",
+                "meta": "0001326801",
+            }
+            cik = common_companies.get(company_search.lower().split()[0], None)
+            
+            if not cik:
+                st.warning("Company not found. Please try another name or use CIK number.")
+                return
+        
+        # Fetch and display filings
+        try:
+            filings = edgar_client.get_recent_filings(
+                cik,
+                form_types=[form_type] if form_type != "All" else ["10-K", "10-Q", "8-K"],
+                days_back=365
+            )
+            
+            if filings:
+                st.subheader("Recent Filings")
+                for filing in filings:
+                    with st.expander(f"{filing['form']} - {filing['filing_date'].strftime('%Y-%m-%d')}"):
+                        if st.button("View Document", key=filing['accession_number']):
+                            doc_content = edgar_client.get_filing_document(
+                                filing['accession_number'],
+                                cik
+                            )
+                            # Extract readable text from document
+                            readable_content = edgar_client.extract_text_content(doc_content)
+                            st.text_area("Document Content", readable_content, height=400)
+            else:
+                st.info("No filings found for the specified criteria.")
+                
+        except Exception as e:
+            st.error(f"Error fetching filings: {str(e)}")
 
 def run_analysis(cik: str):
     # Create tabs for different views
