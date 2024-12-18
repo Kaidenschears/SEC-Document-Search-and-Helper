@@ -6,11 +6,11 @@ from typing import Dict, List, Optional
 
 class EDGARClient:
     def __init__(self):
-        self.base_url = "https://data.sec.gov/submissions"
+        self.base_url = "https://www.sec.gov/Archives/edgar/data"
+        self.submissions_url = "https://data.sec.gov/submissions"
         self.headers = {
             "User-Agent": "StockAdvisor research@example.com",
             "Accept-Encoding": "gzip, deflate",
-            "Host": "data.sec.gov"
         }
         self.last_request_time = 0
         self.rate_limit_delay = 0.1  # 100ms between requests
@@ -27,58 +27,59 @@ class EDGARClient:
         """Fetch company filings from SEC EDGAR"""
         self._rate_limit()
         padded_cik = cik.zfill(10)
-        url = f"{self.base_url}/CIK{padded_cik}.json"
-        response = requests.get(url, headers=self.headers)
-        if response.status_code == 200:
+        url = f"{self.submissions_url}/CIK{padded_cik}.json"
+        print(f"Fetching company filings from: {url}")
+        
+        try:
+            response = requests.get(url, headers=self.headers)
+            response.raise_for_status()
             return response.json()
-        else:
-            raise Exception(f"Failed to fetch filings: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching company filings: {str(e)}")
+            raise Exception(f"Failed to fetch filings: {str(e)}")
 
     def get_filing_document(self, accession_number: str, cik: str) -> str:
-        """Fetch specific filing document content"""
+        """Fetch specific filing document content using EDGAR data delivery API"""
         self._rate_limit()
         try:
             padded_cik = cik.zfill(10)
-            print(f"Fetching document for CIK: {padded_cik}, Accession: {accession_number}")
-            
-            # First get the company submissions to find the document
-            submissions_url = f"{self.base_url}/CIK{padded_cik}.json"
-            print(f"Fetching submissions from: {submissions_url}")
-            
-            submissions_response = requests.get(submissions_url, headers=self.headers)
-            if submissions_response.status_code != 200:
-                raise Exception(f"Failed to fetch submissions: {submissions_response.status_code}")
-            
-            submissions_data = submissions_response.json()
-            filings = submissions_data.get('filings', {}).get('recent', {})
-            if not filings:
-                raise Exception("No recent filings found")
-            
-            # Find the specific filing
-            accession_numbers = filings.get('accessionNumber', [])
-            if accession_number not in accession_numbers:
-                raise Exception(f"Accession number {accession_number} not found in recent filings")
-            
-            idx = accession_numbers.index(accession_number)
-            primary_doc = filings.get('primaryDocument', [])[idx]
-            
-            # Construct the document URL
             clean_accession = accession_number.replace("-", "")
-            doc_url = f"https://www.sec.gov/Archives/edgar/data/{padded_cik}/{clean_accession}/{primary_doc}"
-            print(f"Fetching document from: {doc_url}")
+            
+            # First get the filing index to find the main document
+            index_url = f"{self.base_url}/{padded_cik}/{clean_accession}/index.json"
+            print(f"Fetching filing index from: {index_url}")
+            
+            index_response = requests.get(index_url, headers=self.headers)
+            index_response.raise_for_status()
+            
+            # Parse index to find the main document
+            index_data = index_response.json()
+            main_doc = None
+            
+            for file_entry in index_data.get('directory', {}).get('item', []):
+                if file_entry.get('type') == '10-K' or file_entry.get('name', '').endswith('.htm'):
+                    main_doc = file_entry['name']
+                    break
+            
+            if not main_doc:
+                raise Exception("Could not find main document in filing index")
             
             # Get the actual document
+            doc_url = f"{self.base_url}/{padded_cik}/{clean_accession}/{main_doc}"
+            print(f"Fetching document from: {doc_url}")
+            
             self._rate_limit()
             doc_response = requests.get(doc_url, headers=self.headers)
+            doc_response.raise_for_status()
             
-            if doc_response.status_code == 200:
-                return doc_response.text
-            else:
-                raise Exception(f"Failed to fetch document content: {doc_response.status_code}")
-                
-        except Exception as e:
-            print(f"Error fetching document for CIK {cik}, accession {accession_number}: {str(e)}")
+            return doc_response.text
+            
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching document: {str(e)}")
             raise Exception(f"Failed to fetch document: {str(e)}")
+        except Exception as e:
+            print(f"Unexpected error: {str(e)}")
+            raise Exception(f"Failed to process document: {str(e)}")
 
     def extract_text_content(self, html_content: str) -> str:
         """Extract readable text from HTML content using trafilatura"""
