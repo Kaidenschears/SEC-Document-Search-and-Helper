@@ -102,17 +102,34 @@ class EDGARClient:
             dates = recent.get('filingDate', [])
             accession_numbers = recent.get('accessionNumber', [])
             primary_docs = recent.get('primaryDocument', [])
+            # Additional data for Form 4
+            reporting_owners = recent.get('reportingOwner', [])
+            transaction_amounts = recent.get('transactionShares', [])
+            transaction_prices = recent.get('transactionPricePerShare', [])
 
             for idx, (form, date, accession, doc) in enumerate(zip(forms, dates, accession_numbers, primary_docs)):
                 if form in form_types:
                     filing_date = datetime.strptime(date, '%Y-%m-%d')
                     if filing_date >= cutoff_date:
-                        recent_filings.append({
+                        filing_data = {
                             'form': form,
                             'filing_date': filing_date,
                             'accession_number': accession,
                             'primary_document': doc
-                        })
+                        }
+                        
+                        # Add insider trading details for Form 4
+                        if form == '4':
+                            try:
+                                filing_data.update({
+                                    'reporting_owner': reporting_owners[idx] if idx < len(reporting_owners) else 'Unknown',
+                                    'transaction_shares': transaction_amounts[idx] if idx < len(transaction_amounts) else None,
+                                    'price_per_share': transaction_prices[idx] if idx < len(transaction_prices) else None
+                                })
+                            except IndexError:
+                                print(f"Warning: Missing insider trading details for filing {accession}")
+                        
+                        recent_filings.append(filing_data)
                         print(f"Found {form} filing from {date} (Accession: {accession})")
 
             return recent_filings

@@ -93,8 +93,8 @@ def main():
     with col2:
         form_type = st.selectbox(
             "Document Type",
-            ["10-K", "10-Q", "8-K", "All"],
-            help="Select the type of financial document"
+            ["10-K", "10-Q", "8-K", "4", "All"],
+            help="Select the type of financial document (Form 4 contains insider trading information)"
         )
     
     if company_search:
@@ -127,15 +127,35 @@ def main():
             if filings:
                 st.subheader("Recent Filings")
                 for filing in filings:
-                    with st.expander(f"{filing['form']} - {filing['filing_date'].strftime('%Y-%m-%d')}"):
-                        if st.button("View Document", key=filing['accession_number']):
-                            doc_content = edgar_client.get_filing_document(
-                                filing['accession_number'],
-                                cik
-                            )
-                            # Extract readable text from document
-                            readable_content = edgar_client.extract_text_content(doc_content)
-                            st.text_area("Document Content", readable_content, height=400)
+                    filing_date = filing['filing_date'].strftime('%Y-%m-%d')
+                    if filing['form'] == '4':
+                        # Special display for Form 4 (Insider Trading)
+                        with st.expander(f"Form 4 - Insider Trading ({filing_date})"):
+                            st.write("**Insider Trading Information**")
+                            st.write(f"Reporting Owner: {filing.get('reporting_owner', 'N/A')}")
+                            shares = filing.get('transaction_shares')
+                            price = filing.get('price_per_share')
+                            if shares and price:
+                                st.write(f"Transaction: {shares:,} shares @ ${price:,.2f} per share")
+                                st.write(f"Total Value: ${shares * price:,.2f}")
+                            
+                            if st.button("View Full Document", key=filing['accession_number']):
+                                doc_content = edgar_client.get_filing_document(
+                                    filing['accession_number'],
+                                    cik
+                                )
+                                readable_content = edgar_client.extract_text_content(doc_content)
+                                st.text_area("Document Content", readable_content, height=400)
+                    else:
+                        # Standard display for other forms
+                        with st.expander(f"{filing['form']} - {filing_date}"):
+                            if st.button("View Document", key=filing['accession_number']):
+                                doc_content = edgar_client.get_filing_document(
+                                    filing['accession_number'],
+                                    cik
+                                )
+                                readable_content = edgar_client.extract_text_content(doc_content)
+                                st.text_area("Document Content", readable_content, height=400)
             else:
                 st.info("No filings found for the specified criteria.")
                 
