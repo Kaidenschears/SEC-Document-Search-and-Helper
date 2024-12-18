@@ -82,79 +82,39 @@ def main():
     
     # Company search section
     st.subheader("Search Company")
+    col1, col2 = st.columns([3, 1])
     
+    with col1:
+        company_search = st.text_input(
+            "Enter Company Name or CIK:",
+            help="Enter a company name (e.g., 'Apple Inc.') or CIK number"
+        )
     
+    with col2:
+        form_type = st.selectbox(
+            "Document Type",
+            ["10-K", "10-Q", "8-K", "4", "All"],
+            help="Select the type of financial document (Form 4 contains insider trading information)"
+        )
     
-    # Add tabs for different search methods
-    search_tab, fortune500_tab = st.tabs(["Search Any Company", "Browse Fortune 500"])
-    
-    with search_tab:
-        col1, col2 = st.columns([3, 1])
-        
-        with col1:
-            company_search = st.text_input(
-                "Enter Company Name or CIK:",
-                help="Enter a company name (e.g., 'Apple Inc.') or CIK number"
-            )
-        
-        with col2:
-            form_type = st.selectbox(
-                "Document Type",
-                ["10-K", "10-Q", "8-K", "4", "All"],
-                help="Select the type of financial document (Form 4 contains insider trading information)"
-            )
-        
-        if company_search:
-            if company_search.isdigit():
-                # Direct CIK lookup
-                cik = company_search.zfill(10)
-            else:
-                try:
-                    # First try Fortune 500 lookup
-                    company_lower = company_search.lower()
-                    fortune500_companies = fortune500_client.get_fortune500_companies()
-                    matches = [c for c in fortune500_companies if company_lower in c.name.lower()]
-                    
-                    if not matches:
-                        # If not found in Fortune 500, try SEC API
-                        sec_matches = edgar_client.search_company(company_search)
-                        if not sec_matches:
-                            st.warning("No companies found matching your search. Please try another name or use CIK number.")
-                            return
-                        
-                        if len(sec_matches) == 1:
-                            cik = sec_matches[0]['cik']
-                        else:
-                            st.write("Multiple companies found. Please select one:")
-                            selected_company = st.selectbox(
-                                "Select Company",
-                                options=sec_matches,
-                                format_func=lambda x: f"{x['name']} ({x['ticker']})"
-                            )
-                            if selected_company:
-                                cik = selected_company['cik']
-                            else:
-                                return
-                    else:
-                        if len(matches) == 1:
-                            cik = matches[0].cik
-                        else:
-                            st.write("Multiple Fortune 500 companies found. Please select one:")
-                            selected = st.selectbox(
-                                "Select Company",
-                                options=matches,
-                                format_func=lambda x: f"{x.name} (CIK: {x.cik})"
-                            )
-                            if selected:
-                                cik = selected.cik
-                            else:
-                                return
-                except Exception as e:
-                    st.error(f"Error searching for company: {str(e)}")
-                    return
-
-    with fortune500_tab:
-        show_fortune500()
+    if company_search:
+        if company_search.isdigit():
+            # Direct CIK lookup
+            cik = company_search.zfill(10)
+        else:
+            # Use example CIK for now - we'll enhance this later
+            common_companies = {
+                "apple": "0000320193",
+                "microsoft": "0000789019",
+                "amazon": "0001018724",
+                "google": "0001652044",
+                "meta": "0001326801",
+            }
+            cik = common_companies.get(company_search.lower().split()[0], None)
+            
+            if not cik:
+                st.warning("Company not found. Please try another name or use CIK number.")
+                return
         
         # Fetch and display filings
         try:
