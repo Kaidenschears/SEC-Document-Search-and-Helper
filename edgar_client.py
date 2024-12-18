@@ -1,7 +1,5 @@
 import requests
 import time
-import json
-import os
 from typing import Dict, List
 import trafilatura
 from datetime import datetime, timedelta

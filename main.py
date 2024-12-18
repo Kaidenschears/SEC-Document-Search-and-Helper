@@ -83,17 +83,7 @@ def main():
     # Company search section
     st.subheader("Search Company")
     
-    # Add refresh mappings button
-    if st.button("🔄 Refresh Company Mappings"):
-        try:
-            from update_company_mappings import CompanyMappingsUpdater
-            updater = CompanyMappingsUpdater()
-            if updater.update_mappings():
-                st.success("Successfully updated company mappings!")
-            else:
-                st.error("Failed to update company mappings. Please check the logs.")
-        except Exception as e:
-            st.error(f"Error updating mappings: {str(e)}")
+    
     
     # Add tabs for different search methods
     search_tab, fortune500_tab = st.tabs(["Search Any Company", "Browse Fortune 500"])
