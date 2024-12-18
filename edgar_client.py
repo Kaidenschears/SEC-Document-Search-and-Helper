@@ -46,26 +46,55 @@ class EDGARClient:
             clean_accession = accession_number.replace("-", "")
             
             if form_type == '4':
-                # Form 4 documents need special handling
-                # Try different possible URLs for Form 4
-                possible_urls = [
-                    f"{self.base_url}/{padded_cik}/{clean_accession}/xslF345X03/{clean_accession}.xml",
-                    f"{self.base_url}/{padded_cik}/{clean_accession}/{clean_accession}.txt",
-                    f"{self.base_url}/{padded_cik}/{clean_accession}/form4.xml"
-                ]
+                # Form 4 documents have a special structure
+                print(f"Fetching Form 4 document for CIK {padded_cik}, accession {accession_number}")
                 
-                for doc_url in possible_urls:
-                    print(f"Attempting to fetch Form 4 document from: {doc_url}")
-                    try:
+                # First try the index to find the correct document
+                index_url = f"{self.base_url}/{padded_cik}/{clean_accession}/index.json"
+                try:
+                    self._rate_limit()
+                    index_response = requests.get(index_url, headers=self.headers)
+                    index_response.raise_for_status()
+                    index_data = index_response.json()
+                    
+                    # Look for form4.xml in the index
+                    form4_file = None
+                    for file in index_data.get('directory', {}).get('item', []):
+                        if file.get('name', '').endswith('.xml') and 'form4' in file.get('name', '').lower():
+                            form4_file = file['name']
+                            break
+                    
+                    if form4_file:
+                        doc_url = f"{self.base_url}/{padded_cik}/{clean_accession}/{form4_file}"
+                        print(f"Found Form 4 XML file, fetching from: {doc_url}")
                         self._rate_limit()
                         doc_response = requests.get(doc_url, headers=self.headers)
                         doc_response.raise_for_status()
                         return doc_response.text
-                    except requests.exceptions.RequestException as e:
-                        print(f"Failed to fetch from {doc_url}: {str(e)}")
+                        
+                except Exception as e:
+                    print(f"Failed to fetch Form 4 from index: {str(e)}")
+                    
+                # If index approach fails, try common Form 4 URL patterns
+                patterns = [
+                    f"{self.base_url}/{padded_cik}/{clean_accession}/form4.xml",
+                    f"{self.base_url}/{padded_cik}/{clean_accession}/xslF345X03/form4.xml",
+                    f"{self.base_url}/{padded_cik}/{clean_accession}/{clean_accession}.txt",
+                    f"{self.base_url}/{padded_cik}/{clean_accession}/primary_doc.xml"
+                ]
+                
+                for pattern in patterns:
+                    try:
+                        print(f"Trying Form 4 pattern: {pattern}")
+                        self._rate_limit()
+                        response = requests.get(pattern, headers=self.headers)
+                        response.raise_for_status()
+                        return response.text
+                    except Exception as e:
+                        print(f"Failed with pattern {pattern}: {str(e)}")
                         continue
                 
-                raise Exception("Failed to fetch Form 4 document from any known URL pattern")
+                raise Exception("Could not retrieve Form 4 document using any known method")
             else:
                 # For other forms, get the index first
                 index_url = f"{self.base_url}/{padded_cik}/{clean_accession}/index.json"
