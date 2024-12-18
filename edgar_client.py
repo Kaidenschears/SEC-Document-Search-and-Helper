@@ -248,43 +248,30 @@ class EDGARClient:
             return {}
 
     def search_company(self, company_name: str) -> List[Dict]:
-        """Search for companies using local mappings file with improved performance"""
+        """Search for companies by name using SEC API"""
+        self._rate_limit()
         try:
-            if not company_name:
-                return []
-
-            search_term = company_name.lower().strip()
-            print(f"Searching for company with term: {search_term}")
+            # SEC's company search API
+            url = "https://www.sec.gov/files/company_tickers.json"
+            print(f"Searching for company: {company_name}")
             
-            # Ensure mappings are loaded
-            companies = self._load_company_mappings()
-            print(f"Loaded {len(companies)} companies from mappings")
+            response = requests.get(url, headers=self.headers)
+            response.raise_for_status()
+            company_data = response.json()
             
-            # Quick search for exact matches first
-            exact_matches = []
-            partial_matches = []
+            # Search through the companies
+            matches = []
+            search_term = company_name.lower()
             
-            for ticker, company_info in companies.items():
-                company_name_lower = company_info['name'].lower()
-                ticker_lower = company_info['ticker'].lower()
-                
-                # Check for exact matches first (more precise matching)
-                if (search_term == company_name_lower or 
-                    search_term == ticker_lower or 
-                    search_term in company_name_lower.split() or 
-                    search_term in ticker_lower.split()):
-                    exact_matches.append(company_info)
-                # Then check for partial matches
-                elif search_term in company_name_lower or search_term in ticker_lower:
-                    partial_matches.append(company_info)
-                
-                # Limit to top 10 matches for better performance
-                if len(exact_matches) + len(partial_matches) >= 10:
-                    break
+            for _, company in company_data.items():
+                if search_term in company['title'].lower():
+                    matches.append({
+                        'name': company['title'],
+                        'cik': str(company['cik_str']).zfill(10),
+                        'ticker': company['ticker']
+                    })
             
-            results = exact_matches + partial_matches
-            print(f"Found {len(results)} matches ({len(exact_matches)} exact, {len(partial_matches)} partial)")
-            return results
+            return matches
 
         except Exception as e:
             print(f"Error searching for company: {str(e)}")
