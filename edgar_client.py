@@ -15,6 +15,10 @@ class EDGARClient:
         }
         self.last_request_time = 0
         self.rate_limit_delay = 0.1  # 100ms between requests
+        # Initialize company mappings at startup
+        self._cached_companies = None
+        self._last_cache_update = None
+        self._load_company_mappings()  # Preload mappings
     
     def _rate_limit(self):
         """Implement rate limiting to comply with SEC EDGAR guidelines"""
@@ -249,19 +253,26 @@ class EDGARClient:
             if not company_name:
                 return []
 
-            search_term = company_name.lower()
+            search_term = company_name.lower().strip()
+            print(f"Searching for company with term: {search_term}")
+            
+            # Ensure mappings are loaded
             companies = self._load_company_mappings()
+            print(f"Loaded {len(companies)} companies from mappings")
             
             # Quick search for exact matches first
             exact_matches = []
             partial_matches = []
             
-            for company_info in companies.values():
+            for ticker, company_info in companies.items():
                 company_name_lower = company_info['name'].lower()
                 ticker_lower = company_info['ticker'].lower()
                 
-                # Check for exact matches first
-                if search_term == company_name_lower or search_term == ticker_lower:
+                # Check for exact matches first (more precise matching)
+                if (search_term == company_name_lower or 
+                    search_term == ticker_lower or 
+                    search_term in company_name_lower.split() or 
+                    search_term in ticker_lower.split()):
                     exact_matches.append(company_info)
                 # Then check for partial matches
                 elif search_term in company_name_lower or search_term in ticker_lower:
@@ -271,8 +282,9 @@ class EDGARClient:
                 if len(exact_matches) + len(partial_matches) >= 10:
                     break
             
-            # Return exact matches first, then partial matches
-            return exact_matches + partial_matches
+            results = exact_matches + partial_matches
+            print(f"Found {len(results)} matches ({len(exact_matches)} exact, {len(partial_matches)} partial)")
+            return results
 
         except Exception as e:
             print(f"Error searching for company: {str(e)}")
