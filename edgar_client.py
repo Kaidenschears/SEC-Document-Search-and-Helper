@@ -47,14 +47,25 @@ class EDGARClient:
             
             if form_type == '4':
                 # Form 4 documents need special handling
-                doc_url = f"{self.base_url}/{padded_cik}/{clean_accession}/{clean_accession}.txt"
-                print(f"Fetching Form 4 document from: {doc_url}")
+                # Try different possible URLs for Form 4
+                possible_urls = [
+                    f"{self.base_url}/{padded_cik}/{clean_accession}/xslF345X03/{clean_accession}.xml",
+                    f"{self.base_url}/{padded_cik}/{clean_accession}/{clean_accession}.txt",
+                    f"{self.base_url}/{padded_cik}/{clean_accession}/form4.xml"
+                ]
                 
-                self._rate_limit()
-                doc_response = requests.get(doc_url, headers=self.headers)
-                doc_response.raise_for_status()
+                for doc_url in possible_urls:
+                    print(f"Attempting to fetch Form 4 document from: {doc_url}")
+                    try:
+                        self._rate_limit()
+                        doc_response = requests.get(doc_url, headers=self.headers)
+                        doc_response.raise_for_status()
+                        return doc_response.text
+                    except requests.exceptions.RequestException as e:
+                        print(f"Failed to fetch from {doc_url}: {str(e)}")
+                        continue
                 
-                return doc_response.text
+                raise Exception("Failed to fetch Form 4 document from any known URL pattern")
             else:
                 # For other forms, get the index first
                 index_url = f"{self.base_url}/{padded_cik}/{clean_accession}/index.json"
