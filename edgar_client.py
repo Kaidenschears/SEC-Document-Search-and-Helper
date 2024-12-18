@@ -39,29 +39,42 @@ class EDGARClient:
         self._rate_limit()
         try:
             padded_cik = cik.zfill(10)
-            # Format accession number by removing dashes and adding required parts
+            print(f"Fetching document for CIK: {padded_cik}, Accession: {accession_number}")
+            
+            # First get the company submissions to find the document
+            submissions_url = f"{self.base_url}/CIK{padded_cik}.json"
+            print(f"Fetching submissions from: {submissions_url}")
+            
+            submissions_response = requests.get(submissions_url, headers=self.headers)
+            if submissions_response.status_code != 200:
+                raise Exception(f"Failed to fetch submissions: {submissions_response.status_code}")
+            
+            submissions_data = submissions_response.json()
+            filings = submissions_data.get('filings', {}).get('recent', {})
+            if not filings:
+                raise Exception("No recent filings found")
+            
+            # Find the specific filing
+            accession_numbers = filings.get('accessionNumber', [])
+            if accession_number not in accession_numbers:
+                raise Exception(f"Accession number {accession_number} not found in recent filings")
+            
+            idx = accession_numbers.index(accession_number)
+            primary_doc = filings.get('primaryDocument', [])[idx]
+            
+            # Construct the document URL
             clean_accession = accession_number.replace("-", "")
+            doc_url = f"https://www.sec.gov/Archives/edgar/data/{padded_cik}/{clean_accession}/{primary_doc}"
+            print(f"Fetching document from: {doc_url}")
             
-            # Construct proper SEC EDGAR URL
-            url = f"https://www.sec.gov/Archives/edgar/data/{padded_cik}/{clean_accession}/{accession_number}-index.htm"
+            # Get the actual document
+            self._rate_limit()
+            doc_response = requests.get(doc_url, headers=self.headers)
             
-            # First get the index page
-            response = requests.get(url, headers=self.headers)
-            
-            if response.status_code == 200:
-                # Find the actual document URL from the index
-                doc_url = f"https://www.sec.gov/Archives/edgar/data/{padded_cik}/{clean_accession}/{clean_accession}.txt"
-                
-                # Get the actual document
-                self._rate_limit()  # Additional rate limit for second request
-                doc_response = requests.get(doc_url, headers=self.headers)
-                
-                if doc_response.status_code == 200:
-                    return doc_response.text
-                else:
-                    raise Exception(f"Failed to fetch document content: {doc_response.status_code}")
+            if doc_response.status_code == 200:
+                return doc_response.text
             else:
-                raise Exception(f"Failed to fetch filing index: {response.status_code}")
+                raise Exception(f"Failed to fetch document content: {doc_response.status_code}")
                 
         except Exception as e:
             print(f"Error fetching document for CIK {cik}, accession {accession_number}: {str(e)}")
@@ -73,21 +86,35 @@ class EDGARClient:
 
     def get_recent_filings(self, cik: str, form_types: List[str], days_back: int = 30) -> List[Dict]:
         """Get recent filings for a company filtered by form types"""
-        filings_data = self.get_company_filings(cik)
-        recent_filings = []
-        cutoff_date = datetime.now() - timedelta(days=days_back)
+        try:
+            print(f"Fetching recent filings for CIK: {cik}")
+            filings_data = self.get_company_filings(cik)
+            recent_filings = []
+            cutoff_date = datetime.now() - timedelta(days=days_back)
 
-        for idx, form in enumerate(filings_data.get('filings', {}).get('recent', {}).get('form', [])):
-            if form in form_types:
-                filing_date = datetime.strptime(
-                    filings_data['filings']['recent']['filingDate'][idx],
-                    '%Y-%m-%d'
-                )
-                if filing_date >= cutoff_date:
-                    recent_filings.append({
-                        'form': form,
-                        'filing_date': filing_date,
-                        'accession_number': filings_data['filings']['recent']['accessionNumber'][idx]
-                    })
+            recent = filings_data.get('filings', {}).get('recent', {})
+            if not recent:
+                print(f"No recent filings found for CIK: {cik}")
+                return []
 
-        return recent_filings
+            forms = recent.get('form', [])
+            dates = recent.get('filingDate', [])
+            accession_numbers = recent.get('accessionNumber', [])
+            primary_docs = recent.get('primaryDocument', [])
+
+            for idx, (form, date, accession, doc) in enumerate(zip(forms, dates, accession_numbers, primary_docs)):
+                if form in form_types:
+                    filing_date = datetime.strptime(date, '%Y-%m-%d')
+                    if filing_date >= cutoff_date:
+                        recent_filings.append({
+                            'form': form,
+                            'filing_date': filing_date,
+                            'accession_number': accession,
+                            'primary_document': doc
+                        })
+                        print(f"Found {form} filing from {date} (Accession: {accession})")
+
+            return recent_filings
+        except Exception as e:
+            print(f"Error getting recent filings for CIK {cik}: {str(e)}")
+            raise Exception(f"Failed to fetch recent filings: {str(e)}")
