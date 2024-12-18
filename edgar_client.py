@@ -1,5 +1,7 @@
 import requests
 import time
+import json
+import os
 from typing import Dict, List
 import trafilatura
 from datetime import datetime, timedelta
@@ -214,34 +216,33 @@ class EDGARClient:
             return {"error": f"Failed to parse Form 4 content: {str(e)}"}
 
     def search_company(self, company_name: str) -> List[Dict]:
-        """Search for companies by name using SEC API"""
-        self._rate_limit()
+        """Search for companies using local mappings file"""
         try:
-            # SEC's company search API
-            url = "https://www.sec.gov/files/company_tickers.json"
-            print(f"Searching for company: {company_name}")
-            
-            response = requests.get(url, headers=self.headers)
-            response.raise_for_status()
-            company_data = response.json()
-            
-            # Search through the companies
-            matches = []
+            mappings_file = "company_mappings.json"
             search_term = company_name.lower()
-            
-            for _, company in company_data.items():
-                if search_term in company['title'].lower():
-                    matches.append({
-                        'name': company['title'],
-                        'cik': str(company['cik_str']).zfill(10),
-                        'ticker': company['ticker']
-                    })
-            
+            matches = []
+
+            # Check if mappings file exists
+            if not os.path.exists(mappings_file):
+                print("Company mappings file not found. Please run update_company_mappings.py first.")
+                return []
+
+            # Load company mappings
+            with open(mappings_file, 'r') as f:
+                data = json.load(f)
+                companies = data.get('companies', {})
+
+            # Search through companies
+            for company_info in companies.values():
+                if (search_term in company_info['name'].lower() or 
+                    search_term in company_info['ticker'].lower()):
+                    matches.append(company_info)
+
             return matches
-            
+
         except Exception as e:
             print(f"Error searching for company: {str(e)}")
-            raise Exception(f"Failed to search for company: {str(e)}")
+            return []
 
     def get_recent_filings(self, cik: str, form_types: List[str], days_back: int = 30) -> List[Dict]:
         """Get recent filings for a company filtered by form types"""
