@@ -158,9 +158,20 @@ def main():
                                         st.write("**Insider Trading Summary**")
                                         st.write(f"**Insider Name:** {summary['owner_name']}")
                                         st.write(f"**Position:** {summary['owner_title']}")
-                                        st.write(f"**Transaction:** {summary['transaction_type']}")
-                                        st.write(f"**Shares:** {summary['shares']:,.0f}")
-                                        st.write(f"**Price per Share:** ${summary['price_per_share']:,.2f}")
+                                        
+                                        if 'transactions' in summary:
+                                            st.write("**Transaction Details:**")
+                                            for idx, trans in enumerate(summary['transactions'], 1):
+                                                st.write(f"\nTransaction {idx}:")
+                                                st.write(f"- Type: {trans['type'].replace('-', ' ').title()}")
+                                                st.write(f"- Shares: {trans['shares']:,.0f}")
+                                                st.write(f"- Price per Share: ${trans['price_per_share']:,.2f}")
+                                                st.write(f"- Value: ${trans['shares'] * trans['price_per_share']:,.2f}")
+                                        
+                                        st.write("\n**Overall Summary:**")
+                                        st.write(f"**Total Transaction:** {summary['transaction_type']}")
+                                        st.write(f"**Total Shares:** {summary['shares']:,.0f}")
+                                        st.write(f"**Average Price per Share:** ${summary['price_per_share']:,.2f}")
                                         total_value = summary['shares'] * summary['price_per_share']
                                         st.write(f"**Total Value:** ${total_value:,.2f}")
                     else:

@@ -146,29 +146,68 @@ class EDGARClient:
             # Extract reporting owner information
             owner_data = root.find(".//reportingOwner")
             if owner_data is None:
+                print("No reporting owner found in XML")
                 return {"error": "No reporting owner found"}
                 
             owner_name = owner_data.find(".//rptOwnerName")
             owner_title = owner_data.find(".//officerTitle")
             
-            # Extract transaction information
-            transaction = root.find(".//nonDerivativeTransaction")
-            if transaction is None:
-                return {"error": "No transaction data found"}
-                
-            shares_elem = transaction.find(".//transactionShares/value")
-            price_elem = transaction.find(".//transactionPricePerShare/value")
-            transaction_code = transaction.find(".//transactionCode")
+            # Look for both non-derivative and derivative transactions
+            transactions = []
             
-            # Get transaction type (P = Purchase, S = Sale)
-            transaction_type = "Purchase" if transaction_code is not None and transaction_code.text == "P" else "Sale"
+            # Check non-derivative transactions
+            for trans in root.findall(".//nonDerivativeTransaction"):
+                try:
+                    shares_elem = trans.find(".//transactionShares/value")
+                    price_elem = trans.find(".//transactionPricePerShare/value")
+                    transaction_code = trans.find(".//transactionCode")
+                    
+                    if shares_elem is not None and price_elem is not None:
+                        transactions.append({
+                            "type": "non-derivative",
+                            "shares": float(shares_elem.text),
+                            "price_per_share": float(price_elem.text),
+                            "transaction_code": transaction_code.text if transaction_code is not None else "Unknown"
+                        })
+                except Exception as e:
+                    print(f"Error parsing non-derivative transaction: {str(e)}")
+            
+            # Check derivative transactions
+            for trans in root.findall(".//derivativeTransaction"):
+                try:
+                    shares_elem = trans.find(".//transactionShares/value")
+                    price_elem = trans.find(".//transactionPricePerShare/value")
+                    transaction_code = trans.find(".//transactionCode")
+                    
+                    if shares_elem is not None and price_elem is not None:
+                        transactions.append({
+                            "type": "derivative",
+                            "shares": float(shares_elem.text),
+                            "price_per_share": float(price_elem.text),
+                            "transaction_code": transaction_code.text if transaction_code is not None else "Unknown"
+                        })
+                except Exception as e:
+                    print(f"Error parsing derivative transaction: {str(e)}")
+            
+            if not transactions:
+                print("No valid transactions found in XML")
+                return {"error": "No transaction data found"}
+            
+            # Calculate total shares and average price for summary
+            total_shares = sum(t["shares"] for t in transactions)
+            weighted_price = sum(t["shares"] * t["price_per_share"] for t in transactions) / total_shares if total_shares > 0 else 0
+            
+            # Determine overall transaction type (P = Purchase, S = Sale)
+            transaction_codes = [t["transaction_code"] for t in transactions]
+            transaction_type = "Purchase" if "P" in transaction_codes else "Sale"
             
             return {
                 "owner_name": owner_name.text if owner_name is not None else "Unknown",
                 "owner_title": owner_title.text if owner_title is not None else "Unknown Position",
                 "transaction_type": transaction_type,
-                "shares": float(shares_elem.text) if shares_elem is not None else 0,
-                "price_per_share": float(price_elem.text) if price_elem is not None else 0
+                "shares": total_shares,
+                "price_per_share": weighted_price,
+                "transactions": transactions  # Include all transactions for detailed view
             }
         except Exception as e:
             print(f"Error parsing Form 4 content: {str(e)}")
