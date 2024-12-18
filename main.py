@@ -109,6 +109,7 @@ def main():
                 "amazon": "0001018724",
                 "google": "0001652044",
                 "meta": "0001326801",
+                "nvidia": "0001045810",
             }
             cik = common_companies.get(company_search.lower().split()[0], None)
             
